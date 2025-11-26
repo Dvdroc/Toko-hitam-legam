@@ -9,7 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\OrderItem;
 use App\Models\Order;
-use App\Models\ProductionSlot;
+// use App\Models\ProductionSlot; <-- DIHAPUS
+// use App\Http\Controllers\Admin\SlotController; <-- DIHAPUS (jika ada, saya hapus saja untuk memastikan)
 use Illuminate\Support\Facades\Auth;
 
 class OrderController extends Controller
@@ -20,7 +21,8 @@ class OrderController extends Controller
         // Ambil item pesanan yang statusnya tidak 'batal'
         $items = OrderItem::with(['product', 'order.user'])
             ->whereHas('order', function($q) {
-                $q->where('status', '!=', 'cancelled');
+                // Menampilkan semua pesanan kecuali yang dibatalkan
+                $q->where('status', '!=', 'cancelled'); 
             })
             ->latest()
             ->get();
@@ -46,8 +48,12 @@ class OrderController extends Controller
 
         $order->update(['status' => $request->status]);
         
+        // TIDAK ADA LOGIKA ProductionSlot di sini
+        
         return back()->with('success', 'Status pesanan #' . $id . ' berhasil diperbarui.');
     }
+
+    // FUNGSI show() - Menampilkan ketersediaan kuota produk per tanggal
     public function show($id, Request $request){
         $product = Product::findOrFail($id);
         $pickupDate = $request->query('pickup_date'); // ambil dari query string jika ada
@@ -55,7 +61,7 @@ class OrderController extends Controller
         // Hitung slot
         $monthStart = Carbon::today()->startOfMonth();
         $monthEnd = Carbon::today()->endOfMonth();
-        $slots = [];    
+        $slots = [];     
 
         for ($date = $monthStart; $date->lte($monthEnd); $date->addDay()) {
             $dateStr = $date->format('Y-m-d');
@@ -64,11 +70,11 @@ class OrderController extends Controller
                         ->where('date', $dateStr)
                         ->exists();
 
+            // hitung total yang sudah dipesan (Hanya menghitung yang TIDAK DIBATALKAN)
             $sold = OrderItem::where('product_id', $product->id)
-                    ->whereHas('order', fn($q) => $q->whereDate('pickup_date', $dateStr))
-                    ->sum('quantity');
+                        ->whereHas('order', fn($q) => $q->whereDate('pickup_date', $dateStr)->where('status', '!=', 'cancelled')) // MODIFIKASI: Filter status
+                        ->sum('quantity');
 
-                    
             $slots[$dateStr] = [
                 'remaining' => max(0, $product->daily_quota - $sold),
                 'is_closed' => $isClosed
@@ -76,6 +82,8 @@ class OrderController extends Controller
         }
             return view('user.pesanan', compact('product', 'slots', 'pickupDate'));
     }
+
+    // FUNGSI store() - Logika Checkout dengan Kuota Produk
     public function store(Request $request){
         $request->validate([
             'product_id' => 'required|exists:products,id',
@@ -86,16 +94,35 @@ class OrderController extends Controller
         ]);
 
         $product = Product::findOrFail($request->product_id);
-        $totalPrice = $product->price * $request->quantity;
+        $requestedQuantity = $request->quantity;
+        $pickupDate = $request->pickup_date;
+        $totalPrice = $product->price * $requestedQuantity;
 
-        $slot = ProductionSlot::firstOrCreate(
-            ['date' => $request->pickup_date],
-            ['quota' => 20, 'used_quota' => 0, 'is_closed' => false]
-        );
+        // --- MULAI LOGIKA PENGECKEKAN KUOTA BARU (MENGGANTIKAN ProductionSlot) ---
 
-        if($slot->is_closed || $slot->quota - $slot->used_quota < $request->quantity){
-            return back()->with('error','Slot tanggal ini tidak tersedia');
+        // A. Cek penutupan manual
+        $isClosed = ProductClosure::where('product_id', $product->id)
+                    ->where('date', $pickupDate)
+                    ->exists();
+
+        if ($isClosed) {
+             return back()->with('error', 'Produk ini tidak tersedia untuk tanggal pengambilan tersebut.');
         }
+
+        // B. Hitung total kuantitas yang sudah dipesan (tidak termasuk yang dibatalkan)
+        $sold = OrderItem::where('product_id', $product->id)
+                ->whereHas('order', fn($q) => $q->whereDate('pickup_date', $pickupDate)->where('status', '!=', 'cancelled'))
+                ->sum('quantity');
+                
+        $dailyQuota = $product->daily_quota;
+        $remainingQuota = max(0, $dailyQuota - $sold);
+
+        // C. Tolak pesanan jika melebihi kuota
+        if ($requestedQuantity > $remainingQuota) {
+            return back()->with('error', 'Pesanan melebihi kuota harian produk (Sisa kuota: ' . $remainingQuota . ' pcs). Pesanan ditolak.');
+        }
+
+        // --- AKHIR LOGIKA PENGECKEKAN KUOTA BARU ---
 
         $order = Order::create([
             'user_id' => Auth::id(),
@@ -107,6 +134,7 @@ class OrderController extends Controller
             'total_price' => $totalPrice,
         ]);
 
+        // SEMUA PESANAN MASUK KE ORDER ITEMS
         OrderItem::create([
             'order_id' => $order->id,
             'product_id' => $product->id,
@@ -118,6 +146,8 @@ class OrderController extends Controller
         // Redirect user ke list pesanan
         return redirect()->route('user.list-pesanan')->with('success', 'Pesanan berhasil dibuat! Tunggu konfirmasi admin.');
     }
+    
+    // FUNGSI userOrders, cancelOrder tidak diubah
     public function userOrders(){
         $orders = Order::with('orderItems.product')
                     ->where('user_id', Auth::id())

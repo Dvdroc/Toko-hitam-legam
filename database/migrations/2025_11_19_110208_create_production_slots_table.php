@@ -11,7 +11,7 @@ return new class extends Migration
     Schema::create('production_slots', function (Blueprint $table) {
         $table->id();
         $table->date('date')->unique(); 
-        $table->integer('quota')->default(20); 
+        $table->integer('quota')->default(200); 
         $table->integer('used_quota')->default(0); 
         $table->boolean('is_closed')->default(false); 
         $table->timestamps();

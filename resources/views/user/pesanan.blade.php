@@ -18,7 +18,7 @@
         <hr class="my-4 border-gray-300">
 
         <!-- Form Pesanan -->
-        <form id="orderForm" action="{{ route('orders.store') }}" method="POST">
+        <form id="orderForm" action="{{ route('user.list-pesanan') }}" method="POST">
             @csrf
             <input type="hidden" name="product_id" value="{{ $product->id }}">
             <input type="hidden" name="quantity" id="orderQuantity" value="1">

@@ -23,7 +23,7 @@ foreach ($products as $product) {
 
     $sold = OrderItem::where('product_id', $product->id)
         ->whereHas('order', fn($q) => $q->whereDate('pickup_date', $dateStr)
-                                         ->where('status', '!=', 'cancelled'))
+                                            ->where('status', '!=', 'cancelled'))
         ->sum('quantity');
 
     $product->sold_today = $sold;

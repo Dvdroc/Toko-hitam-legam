@@ -32,7 +32,7 @@ class OrderController extends Controller
 
         $slot = ProductionSlot::firstOrCreate(
             ['date' => $request->pickup_date],
-            ['quota' => 20, 'used_quota' => 0, 'is_closed' => false]
+            ['quota' => 200, 'used_quota' => 0, 'is_closed' => false]
         );
 
         if($slot->is_closed || $slot->quota - $slot->used_quota < $request->quantity){
@@ -152,7 +152,7 @@ class OrderController extends Controller
         for ($date = $minDate->copy(); $date->lte($maxDate); $date->addDay()) {
             $slot = ProductionSlot::firstOrCreate(
                 ['date' => $date->format('Y-m-d')],
-                ['quota' => 20, 'used_quota' => 0, 'is_closed' => false]
+                ['quota' => 200, 'used_quota' => 0, 'is_closed' => false]
             );
 
             $slots[$date->format('Y-m-d')] = [
