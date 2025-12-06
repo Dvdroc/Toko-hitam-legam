@@ -12,7 +12,7 @@
         </button>
     </div>
 
-    {{-- BAGIAN BARU: FILTER TANGGAL PENGAMBILAN --}}
+    {{-- BAGIAN FILTER TANGGAL --}}
     <div class="mb-8">
         <form action="{{ route('admin.orders.index') }}" method="GET" class="inline-flex items-center bg-white border border-gray-200 shadow-sm rounded-xl px-4 py-2">
             <div class="flex items-center gap-3">
@@ -46,7 +46,8 @@
 
     <div class="space-y-8 pb-20"> 
         @forelse($groupedOrders as $kategori => $orders)
-            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
+            {{-- Container Tabel harus overflow-visible --}}
+            <div class="bg-white rounded-2xl shadow-sm overflow-visible border border-gray-200">
                 
                 <div class="bg-white px-6 py-4 border-b border-gray-100 flex justify-between items-center">
                     <h3 class="text-gray-800 font-bold text-lg tracking-wide flex items-center gap-2">
@@ -69,10 +70,13 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 text-sm">
-                        @foreach($orders as $orderItem)
+                        {{-- LOOPING DENGAN INDEX ($index) --}}
+                        @foreach($orders as $index => $orderItem)
                         @php $order = $orderItem->order; @endphp
                         @if($order)
-                        <tr class="hover:bg-gray-50 transition relative">
+                        
+                        <tr class="hover:bg-gray-50 transition">
+                            
                             <td class="px-6 py-4 font-medium text-gray-900">
                                 #APM-{{ $order->id }}
                                 <div class="text-xs text-gray-400 font-normal mt-1">{{ $order->created_at->format('d/m H:i') }}</div>
@@ -95,7 +99,6 @@
                                 Rp {{ number_format($order->total_price, 0, ',', '.') }}
                             </td>
 
-                            {{-- KOLOM STATUS --}}
                             <td class="px-6 py-4 text-center">
                                 @php
                                     $statusBadge = [
@@ -112,10 +115,10 @@
                                 </span>
                             </td>
 
-                            {{-- KOLOM UPDATE (JS MURNI) --}}
-                            <td class="px-6 py-4 text-center">
+                            {{-- FIX CSS: Z-INDEX PADA TD --}}
+                            <td class="px-6 py-4 text-center relative td-dropdown-container" style="z-index: {{ 50 - $index }};">
                                 <div class="relative inline-block text-left">
-                                    <button onclick="toggleDropdown('dropdown-{{ $order->id }}')" 
+                                    <button onclick="toggleDropdown('dropdown-{{ $order->id }}', this)" 
                                         type="button" 
                                         class="inline-flex justify-center items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
                                         <svg class="mr-1.5 h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
@@ -125,8 +128,9 @@
                                         </svg>
                                     </button>
 
+                                    {{-- DROPDOWN MENU --}}
                                     <div id="dropdown-{{ $order->id }}" 
-                                         class="hidden absolute right-0 mt-2 w-44 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50 overflow-hidden divide-y divide-gray-100 dropdown-menu-item">
+                                         class="hidden absolute right-0 mt-2 w-44 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50 overflow-hidden divide-y divide-gray-100 dropdown-menu-item ">
                                         
                                         @foreach(['pending', 'processing', 'production', 'ready', 'completed', 'cancelled'] as $statusOption)
                                             @if($statusOption !== $order->status)
@@ -186,23 +190,53 @@
         @endforelse
     </div>
 
+    {{-- FIX JAVASCRIPT: BOOSTER Z-INDEX --}}
     <script>
-        function toggleDropdown(dropdownId) {
+        function toggleDropdown(dropdownId, buttonElement) {
             const dropdown = document.getElementById(dropdownId);
             const allDropdowns = document.querySelectorAll('.dropdown-menu-item');
+            
+            // 1. Reset z-index semua parent TD ke 'auto' agar tidak ada konflik
+            document.querySelectorAll('.td-dropdown-container').forEach(td => {
+                td.style.zIndex = 'auto'; // Reset ke default
+            });
+
+            // 2. Tutup semua dropdown lain
             allDropdowns.forEach(item => {
                 if (item.id !== dropdownId) {
                     item.classList.add('hidden');
                 }
             });
-            dropdown.classList.toggle('hidden');
+
+            // 3. Logic Buka/Tutup
+            if (dropdown.classList.contains('hidden')) {
+                // BUKA DROPDOWN
+                dropdown.classList.remove('hidden');
+                
+                // --- KUNCI KEBERHASILAN ---
+                // Cari elemen TD pembungkus tombol ini, dan paksa z-index nya jadi 50
+                // Ini akan membuat TD ini "melompat" ke layer paling atas mengalahkan baris bawahnya
+                const parentTd = buttonElement.closest('td');
+                if (parentTd) {
+                    parentTd.style.zIndex = '50'; 
+                }
+            } else {
+                // TUTUP DROPDOWN
+                dropdown.classList.add('hidden');
+            }
         }
 
+        // Tutup dropdown jika klik di luar area
         window.onclick = function(event) {
             if (!event.target.closest('button')) {
                 const allDropdowns = document.querySelectorAll('.dropdown-menu-item');
                 allDropdowns.forEach(item => {
                     item.classList.add('hidden');
+                });
+                
+                // Reset semua z-index TD saat klik di luar
+                document.querySelectorAll('.td-dropdown-container').forEach(td => {
+                    td.style.zIndex = 'auto';
                 });
             }
         }

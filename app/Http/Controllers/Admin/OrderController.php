@@ -113,6 +113,7 @@ class OrderController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
             'pickup_date' => 'required|date|after_or_equal:today',
+            'pickup_time' => 'required',
             'delivery_type' => 'required|in:pickup,delivery',
             'delivery_address' => 'nullable|string',
         ]);
@@ -147,7 +148,7 @@ class OrderController extends Controller
         $order = Order::create([
             'user_id' => Auth::id(),
             'pickup_date' => $request->pickup_date,
-            'pickup_time' => '09:00:00', // Default jam
+            'pickup_time' => $request->pickup_time,
             'delivery_type' => $request->delivery_type,
             'delivery_address' => $request->delivery_address,
             'status' => 'pending', 

@@ -23,6 +23,7 @@ class OrderController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
             'pickup_date' => 'required|date|after_or_equal:today',
+            'pickup_time' => 'required',
             'delivery_type' => 'required|in:pickup,delivery',
             'delivery_address' => 'nullable|string',
         ]);
@@ -42,7 +43,7 @@ class OrderController extends Controller
         $order = Order::create([
             'user_id' => Auth::id(), // Ambil ID user yang sedang login
             'pickup_date' => $request->pickup_date,
-            'pickup_time' => '09:00:00', // Default jam 9 pagi (bisa dibuat dinamis nanti)
+            'pickup_time' => $request->pickup_time, 
             'delivery_type' => $request->delivery_type,
             'delivery_address' => $request->delivery_address,
             'status' => 'pending', // PENTING: Status awal 'pending' agar muncul di Notifikasi Admin
