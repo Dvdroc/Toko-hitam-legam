@@ -108,31 +108,44 @@ class OrderController extends Controller
     }
 
     // FUNGSI store() - Logika Checkout dengan Kuota Produk
-    public function store(Request $request){
+    public function store(Request $request)
+    {
+        // 1. Validasi
         $request->validate([
             'product_id' => 'required|exists:products,id',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:20', // Minimal 20
             'pickup_date' => 'required|date|after_or_equal:today',
             'pickup_time' => 'required',
             'delivery_type' => 'required|in:pickup,delivery',
             'delivery_address' => 'nullable|string',
+            'payment_proof' => 'required|image|max:2048', // Wajib Upload Bukti
+        ], [
+            'quantity.min' => 'Minimal pemesanan adalah 20 pcs.',
+            'payment_proof.required' => 'Wajib upload bukti pembayaran DP.',
         ]);
 
         $product = Product::findOrFail($request->product_id);
         $requestedQuantity = $request->quantity;
         $pickupDate = $request->pickup_date;
-        $totalPrice = $product->price * $requestedQuantity;
+        
+        // 2. Hitung Harga & DP
+        $serviceFee = 1000; 
+        $shippingFee = ($request->delivery_type == 'delivery') ? 15000 : 0;
+        
+        $subtotal = $product->price * $requestedQuantity;
+        $grandTotal = $subtotal + $serviceFee + $shippingFee;
+        $dpAmount = $grandTotal * 0.5; // DP 50%
 
-        // Cek penutupan manual
+        // 3. Cek Penutupan Tanggal (Product Closure)
         $isClosed = ProductClosure::where('product_id', $product->id)
                     ->where('date', $pickupDate)
                     ->exists();
 
         if ($isClosed) {
-             return back()->with('error', 'Produk ini tidak tersedia untuk tanggal pengambilan tersebut.');
+             return back()->with('error', 'Produk ini tidak tersedia/tutup pada tanggal tersebut.');
         }
 
-        // Hitung total kuantitas yang sudah dipesan
+        // 4. Cek Kuota Harian
         $sold = OrderItem::where('product_id', $product->id)
                 ->whereHas('order', fn($q) => $q->whereDate('pickup_date', $pickupDate)->where('status', '!=', 'cancelled'))
                 ->sum('quantity');
@@ -140,11 +153,17 @@ class OrderController extends Controller
         $dailyQuota = $product->daily_quota;
         $remainingQuota = max(0, $dailyQuota - $sold);
 
-        // Tolak pesanan jika melebihi kuota
         if ($requestedQuantity > $remainingQuota) {
-            return back()->with('error', 'Pesanan melebihi kuota harian produk (Sisa kuota: ' . $remainingQuota . ' pcs). Pesanan ditolak.');
+            return back()->with('error', 'Kuota tidak cukup (Sisa: ' . $remainingQuota . ' pcs).');
         }
 
+        // 5. Upload Bukti Bayar
+        $proofPath = null;
+        if ($request->hasFile('payment_proof')) {
+            $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
+        }
+
+        // 6. Simpan Order
         $order = Order::create([
             'user_id' => Auth::id(),
             'pickup_date' => $request->pickup_date,
@@ -152,7 +171,10 @@ class OrderController extends Controller
             'delivery_type' => $request->delivery_type,
             'delivery_address' => $request->delivery_address,
             'status' => 'pending', 
-            'total_price' => $totalPrice,
+            'payment_status' => 'pending_dp', // Status Pembayaran Baru
+            'total_price' => $grandTotal,
+            'dp_amount' => $dpAmount,        // Nominal DP
+            'payment_proof' => $proofPath,   // Lokasi File
         ]);
 
         OrderItem::create([
@@ -160,10 +182,11 @@ class OrderController extends Controller
             'product_id' => $product->id,
             'quantity' => $request->quantity,
             'price_per_unit' => $product->price,
-            'subtotal' => $totalPrice,
+            'subtotal' => $subtotal,
         ]);
 
-        return redirect()->route('user.list-pesanan')->with('success', 'Pesanan berhasil dibuat! Tunggu konfirmasi admin.');
+        // Redirect ke route yang benar (sesuai web.php Anda: user.list-pesanan)
+        return redirect()->route('user.list-pesanan')->with('success', 'Pesanan berhasil! Mohon tunggu konfirmasi DP.');
     }
     
     public function userOrders(){

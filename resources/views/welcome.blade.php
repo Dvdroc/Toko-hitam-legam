@@ -15,14 +15,10 @@
         <!-- Navbar -->
         <nav class="flex items-center justify-between px-10 py-6 text-white">
             <div class="flex items-center gap-3">
-                <img src="/images/logo.png" class="w-12">
                 <h1 class="text-4xl font-bold">DavidBakery</h1>
             </div>
 
             <ul class="flex items-center gap-10 text-lg">
-                <li><a href="#" class="hover:text-yellow-300">Dashboard</a></li>
-                <li><a href="#" class="hover:text-yellow-300">Contacts</a></li>
-                <li><a href="#" class="hover:text-yellow-300">About</a></li>
                 <li class="flex items-center gap-2">
                     <a  href="{{ route('login') }}""
                        class="border border-white px-5 py-2 rounded-full hover:bg-white hover:text-black transition">

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Order extends Model
 {
     protected $fillable = [
-        'user_id', 'pickup_date', 'pickup_time', 'delivery_type', 'delivery_address', 'status', 'total_price'
+        'user_id', 'pickup_date', 'pickup_time', 'delivery_type', 'delivery_address', 'status', 'total_price', 'payment_status', 'dp_amount', 'payment_proof'
     ];
 
     // Tambahkan relasi ke User
